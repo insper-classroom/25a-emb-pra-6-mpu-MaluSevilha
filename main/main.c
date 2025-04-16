@@ -5,13 +5,14 @@
 
 #include "pico/stdlib.h"
 #include <stdio.h>
+#include <math.h>
 
 #include "hardware/gpio.h"
 #include "hardware/i2c.h"
 #include "mpu6050.h"
 
 #include "Fusion.h"
-#define SAMPLE_PERIOD (0.15f) // replace this with actual sample period
+#define SAMPLE_PERIOD (0.01f) // replace this with actual sample period
 
 const int MPU_ADDRESS = 0x68;
 const int I2C_SDA_GPIO = 4;
@@ -78,10 +79,8 @@ void mpu6050_task(void *p) {
 
     mpu6050_reset();
     int16_t acceleration[3], gyro[3], temp;
-    float roll_ant;
-    int first = 1;
-    mpu_t clicou;
-    clicou.id = 1;
+    float acc_antigo = 0.0f;
+    mpu_t info;
 
     while(1) {
         // leitura da MPU, sem fusao de dados
@@ -105,16 +104,32 @@ void mpu6050_task(void *p) {
 
         // printf("Roll %0.1f, Pitch %0.1f, Yaw %0.1f\n", euler.angle.roll, euler.angle.pitch, euler.angle.yaw);
 
-        if (first){
-            roll_ant = euler.angle.roll;
-            first = 0;
-        } else if (euler.angle.roll - roll_ant > 0.6) {
-            xQueueSend(xQueuePos, &clicou, 10);
+
+        if (euler.angle.yaw > 20 || euler.angle.yaw < -20){
+            info.id = 0;
+            info.dados = euler.angle.yaw;
+            xQueueSend(xQueuePos, &info, 10);
         }
 
-        roll_ant = euler.angle.roll;
+        if (euler.angle.roll > 20 || euler.angle.roll < -20){
+            info.id = 1;
+            info.dados = euler.angle.roll;
+            xQueueSend(xQueuePos, &info, 10);
+        }
 
-        vTaskDelay(pdMS_TO_TICKS(150));
+
+        float acc = pow(accelerometer.axis.x, 2) + pow(accelerometer.axis.y, 2) + pow(accelerometer.axis.z, 2);
+        acc = pow(acc, 0.5);
+
+        if ((acc-acc_antigo) > 0.65 && acc_antigo != 0.0f){
+            info.id = 2;
+            info.dados = 0;
+            xQueueSend(xQueuePos, &info, 10);
+        }
+
+        acc_antigo = acc;
+
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
