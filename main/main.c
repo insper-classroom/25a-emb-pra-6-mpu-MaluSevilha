@@ -80,6 +80,9 @@ void mpu6050_task(void *p) {
     mpu6050_reset();
     int16_t acceleration[3], gyro[3], temp;
     float acc_antigo = 0.0f;
+    double sensibilidade = 0.5;
+    int first = 1;
+    float roll_init, yaw_init, roll_atual, yaw_atual;
     mpu_t info;
 
     while(1) {
@@ -104,47 +107,55 @@ void mpu6050_task(void *p) {
 
         // printf("Roll %0.1f, Pitch %0.1f, Yaw %0.1f\n", euler.angle.roll, euler.angle.pitch, euler.angle.yaw);
 
+        if (first){
+            roll_init = euler.angle.roll*sensibilidade;
+            yaw_init = euler.angle.yaw*sensibilidade;
+            first = 0;
+        }
 
-        if (euler.angle.yaw > 20 || euler.angle.yaw < -20){
+        if (euler.angle.yaw - yaw_init > 2 || euler.angle.yaw - yaw_init < -2){
             info.id = 0;
-            info.dados = euler.angle.yaw;
+            info.dados = euler.angle.yaw*sensibilidade;
+            // printf("YAW: %0.1f \n", euler.angle.yaw - yaw_init);
             xQueueSend(xQueuePos, &info, 10);
         }
 
-        if (euler.angle.roll > 20 || euler.angle.roll < -20){
+        if (euler.angle.roll - roll_init > 2 || euler.angle.roll - roll_init < -2){
             info.id = 1;
-            info.dados = euler.angle.roll;
+            info.dados = euler.angle.roll*sensibilidade;
+            // printf("ROLL: %0.1f \n", euler.angle.roll - roll_init);
             xQueueSend(xQueuePos, &info, 10);
         }
 
-
-        float acc = pow(accelerometer.axis.x, 2) + pow(accelerometer.axis.y, 2) + pow(accelerometer.axis.z, 2);
-        acc = pow(acc, 0.5);
+        double acc = pow(accelerometer.axis.x, 2) + pow(accelerometer.axis.y, 2) + pow(accelerometer.axis.z, 2);
+        acc = sqrt(acc);
 
         if ((acc-acc_antigo) > 0.65 && acc_antigo != 0.0f){
             info.id = 2;
             info.dados = 0;
+            // printf("CLICOU \n");
             xQueueSend(xQueuePos, &info, 10);
         }
 
+        // printf("YAW: %0.1f, ROLL: %0.1f \n", euler.angle.yaw - yaw_init, euler.angle.roll - roll_init);
         acc_antigo = acc;
 
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(150));
     }
 }
 
 void uart_task(void *p) {
-    mpu_t envio;
+    mpu_t data;
 
     while (1) {
-        if (xQueueReceive(xQueuePos, &envio, 100)){
-            uint8_t val_1 = ((uint16_t) envio.dados) >> 8 & 0xFF;
-            uint8_t val_0 = (uint8_t) envio.dados & 0xFF;
+        if (xQueueReceive(xQueuePos, &data, 100)){
+            uint8_t bytes[4];
+            bytes[0] = (uint8_t)(data.id);
+            bytes[1] = (data.dados >> 8) & 0xFF;
+            bytes[2] = data.dados & 0xFF;
+            bytes[3] = 0xFF;
 
-            uart_putc_raw(uart_default, envio.id);
-            uart_putc_raw(uart_default, val_0);
-            uart_putc_raw(uart_default, val_1);
-            uart_putc_raw(uart_default, 0xFF);
+            uart_write_blocking(uart0,bytes,4);
         }
 
         vTaskDelay(pdMS_TO_TICKS(150));

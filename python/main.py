@@ -2,6 +2,7 @@ import sys
 import glob
 import serial
 import pyautogui
+pyautogui.PAUSE = 0
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
@@ -70,7 +71,7 @@ def serial_ports():
 def parse_data(data):
     """Interpreta os dados recebidos do buffer (axis + valor)."""
     axis = data[0]
-    value = int.from_bytes(data[1:3], byteorder='little', signed=True)
+    value = int.from_bytes(data[1:3], byteorder='big', signed=True)
     return axis, value
 
 def conectar_porta(port_name, root, botao_conectar, status_label, mudar_cor_circulo):
