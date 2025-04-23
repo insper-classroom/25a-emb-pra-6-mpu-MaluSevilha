@@ -83,24 +83,6 @@ void mpu6050_task(void *p) {
     int last_yaw = 0.0f, last_roll = 0.0f;
     mpu_t info;
 
-    mpu6050_read_raw(acceleration, gyro, &temp);
-
-    FusionVector gyroscope = {
-        .axis.x = gyro[0] / 131.0f, // Conversão para graus/s
-        .axis.y = gyro[1] / 131.0f,
-        .axis.z = gyro[2] / 131.0f,
-    };
-
-    FusionVector accelerometer = {
-        .axis.x = acceleration[0] / 16384.0f, // Conversão para g
-        .axis.y = acceleration[1] / 16384.0f,
-        .axis.z = acceleration[2] / 16384.0f,
-    }; 
-
-    FusionAhrsUpdateNoMagnetometer(&ahrs, gyroscope, accelerometer, SAMPLE_PERIOD);
-
-    const FusionEuler euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&ahrs));
-
     while(1) {
         // leitura da MPU, sem fusao de dados
         mpu6050_read_raw(acceleration, gyro, &temp);
