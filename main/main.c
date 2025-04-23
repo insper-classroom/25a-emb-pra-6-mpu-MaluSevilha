@@ -79,10 +79,9 @@ void mpu6050_task(void *p) {
 
     mpu6050_reset();
     int16_t acceleration[3], gyro[3], temp;
-    float acc_antigo = 0.0f;
+    float acc_antigo = 0.0f, roll_init, yaw_init;
     double sensibilidade = 0.5;
     int first = 1;
-    float roll_init, yaw_init, roll_atual, yaw_atual;
     mpu_t info;
 
     while(1) {
@@ -107,7 +106,7 @@ void mpu6050_task(void *p) {
 
         // printf("Roll %0.1f, Pitch %0.1f, Yaw %0.1f\n", euler.angle.roll, euler.angle.pitch, euler.angle.yaw);
 
-        if (first){
+        if (first == 1){
             roll_init = euler.angle.roll*sensibilidade;
             yaw_init = euler.angle.yaw*sensibilidade;
             first = 0;
