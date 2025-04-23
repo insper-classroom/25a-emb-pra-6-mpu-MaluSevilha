@@ -79,10 +79,27 @@ void mpu6050_task(void *p) {
 
     mpu6050_reset();
     int16_t acceleration[3], gyro[3], temp;
-    float acc_antigo = 0.0f, roll_init, yaw_init;
-    double sensibilidade = 0.5;
-    int first = 1;
+    float acc_antigo = 0.0f;
+    int last_yaw = 0.0f, last_roll = 0.0f;
     mpu_t info;
+
+    mpu6050_read_raw(acceleration, gyro, &temp);
+
+    FusionVector gyroscope = {
+        .axis.x = gyro[0] / 131.0f, // Conversão para graus/s
+        .axis.y = gyro[1] / 131.0f,
+        .axis.z = gyro[2] / 131.0f,
+    };
+
+    FusionVector accelerometer = {
+        .axis.x = acceleration[0] / 16384.0f, // Conversão para g
+        .axis.y = acceleration[1] / 16384.0f,
+        .axis.z = acceleration[2] / 16384.0f,
+    }; 
+
+    FusionAhrsUpdateNoMagnetometer(&ahrs, gyroscope, accelerometer, SAMPLE_PERIOD);
+
+    const FusionEuler euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&ahrs));
 
     while(1) {
         // leitura da MPU, sem fusao de dados
@@ -104,39 +121,29 @@ void mpu6050_task(void *p) {
 
         const FusionEuler euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&ahrs));
 
-        // printf("Roll %0.1f, Pitch %0.1f, Yaw %0.1f\n", euler.angle.roll, euler.angle.pitch, euler.angle.yaw);
-
-        if (first == 1){
-            roll_init = euler.angle.roll*sensibilidade;
-            yaw_init = euler.angle.yaw*sensibilidade;
-            first = 0;
-        }
-
-        if (euler.angle.yaw - yaw_init > 2 || euler.angle.yaw - yaw_init < -2){
+        if (last_yaw != euler.angle.yaw){
             info.id = 0;
-            info.dados = euler.angle.yaw*sensibilidade;
-            // printf("YAW: %0.1f \n", euler.angle.yaw - yaw_init);
-            xQueueSend(xQueuePos, &info, 10);
+            info.dados = euler.angle.yaw;
+            last_yaw = euler.angle.yaw;
+            xQueueSend(xQueuePos, &info, 0);
         }
 
-        if (euler.angle.roll - roll_init > 2 || euler.angle.roll - roll_init < -2){
+        if (euler.angle.roll != last_roll){
             info.id = 1;
-            info.dados = euler.angle.roll*sensibilidade;
-            // printf("ROLL: %0.1f \n", euler.angle.roll - roll_init);
-            xQueueSend(xQueuePos, &info, 10);
+            info.dados = euler.angle.roll;
+            last_roll = euler.angle.roll;
+            xQueueSend(xQueuePos, &info, 0);
         }
 
         double acc = pow(accelerometer.axis.x, 2) + pow(accelerometer.axis.y, 2) + pow(accelerometer.axis.z, 2);
         acc = sqrt(acc);
 
-        if ((acc-acc_antigo) > 0.65 && acc_antigo != 0.0f){
+        if ((acc - acc_antigo) > 0.65 && acc_antigo != 0.0f){
             info.id = 2;
             info.dados = 0;
-            // printf("CLICOU \n");
-            xQueueSend(xQueuePos, &info, 10);
+            xQueueSend(xQueuePos, &info, 150);
         }
 
-        // printf("YAW: %0.1f, ROLL: %0.1f \n", euler.angle.yaw - yaw_init, euler.angle.roll - roll_init);
         acc_antigo = acc;
 
         vTaskDelay(pdMS_TO_TICKS(150));
@@ -154,10 +161,10 @@ void uart_task(void *p) {
             bytes[2] = data.dados & 0xFF;
             bytes[3] = 0xFF;
 
-            uart_write_blocking(uart0,bytes,4);
+            uart_write_blocking(uart_default, bytes, 4);
         }
 
-        vTaskDelay(pdMS_TO_TICKS(150));
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
@@ -165,9 +172,13 @@ void uart_task(void *p) {
 int main() {
     stdio_init_all();
 
+    uart_init(uart_default, 115200);
+    gpio_set_function(0, GPIO_FUNC_UART);
+    gpio_set_function(1, GPIO_FUNC_UART);
+
     xTaskCreate(mpu6050_task, "mpu6050_Task 1", 8192, NULL, 1, NULL);
     xTaskCreate(uart_task, "uart_task", 4095, NULL, 1, NULL);
-    xQueuePos = xQueueCreate(64, sizeof(int));
+    xQueuePos = xQueueCreate(64, sizeof(mpu_t));
 
     vTaskStartScheduler();
 
