@@ -108,7 +108,12 @@ void mpu6050_task(void *p) {
 
         const FusionEuler euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&ahrs));
 
-        yaw_gyro += gyroscope.axis.z * SAMPLE_PERIOD;
+        if (yaw_gyro == 0.0f){
+            yaw_gyro -= gyroscope.axis.z * SAMPLE_PERIOD;
+            last_yaw = yaw_gyro;
+        } else {
+            yaw_gyro += gyroscope.axis.z * SAMPLE_PERIOD;
+        }
 
         // printf("YAW: %0.0f \n", euler.angle.yaw);
         
