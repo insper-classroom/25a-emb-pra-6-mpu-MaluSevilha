@@ -82,6 +82,7 @@ void mpu6050_task(void *p) {
     float acc_antigo = 0.0f;
     int last_yaw = 0.0f, last_roll = 0.0f;
     mpu_t info;
+    float yaw_gyro = 0.0f;
 
     while(1) {
         // leitura da MPU, sem fusao de dados
@@ -99,20 +100,28 @@ void mpu6050_task(void *p) {
             .axis.z = acceleration[2] / 16384.0f,
         }; 
 
+        // printf("GYRO X: %0.0f| Y: %0.0f| Z: %0.0f \n", gyroscope.axis.x, gyroscope.axis.y, gyroscope.axis.z);
+
+        // printf("ACCEL X: %0.0f| Y: %0.0f| Z: %0.0f \n", accelerometer.axis.x, accelerometer.axis.y, accelerometer.axis.z);
+        
         FusionAhrsUpdateNoMagnetometer(&ahrs, gyroscope, accelerometer, SAMPLE_PERIOD);
 
         const FusionEuler euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&ahrs));
 
-        if (last_yaw != euler.angle.yaw){
+        yaw_gyro += gyroscope.axis.z * SAMPLE_PERIOD;
+
+        // printf("YAW: %0.0f \n", euler.angle.yaw);
+        
+        if (last_yaw != yaw_gyro){
             info.id = 0;
-            info.dados = euler.angle.yaw;
-            last_yaw = euler.angle.yaw;
+            info.dados = -yaw_gyro;
+            last_yaw = yaw_gyro;
             xQueueSend(xQueuePos, &info, 0);
         }
 
         if (euler.angle.roll != last_roll){
             info.id = 1;
-            info.dados = euler.angle.roll;
+            info.dados = -euler.angle.roll;
             last_roll = euler.angle.roll;
             xQueueSend(xQueuePos, &info, 0);
         }
